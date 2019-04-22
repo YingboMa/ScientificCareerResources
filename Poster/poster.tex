@@ -6,12 +6,16 @@
 
 \documentclass[papersize={48in,36in},dvipsnames,fontmag=.60]{umbcposter}
 
+\usepackage{multicol}
+\usepackage{tikz}
+\usepackage{pgfplots}
+
 \usepackage{times}
 \usepackage{url}
 \usepackage{amsmath}
-\definecolor{headerGrey}{RGB}{222,222,224}
-\definecolor{dBlue}{RGB}{2,45,96}
-\definecolor{lBlue}{RGB}{2,66,114}
+\definecolor{mitred}{RGB}{163,31,52}
+\definecolor{mitdgray}{RGB}{138,139,140}
+\definecolor{mitlgray}{RGB}{194,192,191}
 
 % Change the font to Computer Modern Sans Serif
 % The default is Times New Roman
@@ -22,79 +26,173 @@
 \newcommand{\mytitle}{
     \tikz \node[
             fill=white,
-            draw=dBlue,                   % draw box border
+            draw=mitred,                   % draw box border
             rounded corners=2ex,
             opacity=0.75,                % background opacity
             text opacity=.9,             % text opacity
             inner sep=0.15\headheight,  % padding around the text
         ] at (0,0) {
             \begin{tabular}{c}
-                \Huge
-                    Independent Mean/Variance Regulation in the
-                    Self-Enhanced Degradation Motif \\
-                \huge Chris Rackauckas, Likun Zheng, Julian Sosnik, Tom Schilling, Qing Nie
+                \Huge Efficient Stiff Ordinary Differential Equation Solvers for \\
+                \Huge Quantitative Systems Pharmacology (QsP) \\
+                \huge Yingbo Ma, Xingjian Guo, Chris Rackauckas
             \end{tabular}
     };    % don't forget the semicolon here!
 }
 
-
 \posterinit{
 	%grid,
 	columns = {3},
-  	background command = {
-     		\path (current page.center) node {
-         		\includegraphics[width=\paperwidth,height=\paperheight]{figures/zebrafish.jpg}};
-   	},
+	background style = {fill = mitlgray},
 	title = {\mytitle},
-	left logo = {\includegraphics[height=.33\headheight]{../uciLogos/AyalaLogos/UCI_FJA_SBS_LOGO_HOR_FIN_DNA_RGB_R.jpg}},
-	right logo = {\includegraphics[height=.75\headheight]{../uciLogos/CCBS/CCBS_GlowBallsWBG.pdf}},
-	box/border style= {draw = dBlue, line width = 1pt},
-	box/header style = {top color = dBlue, bottom color = dBlue, middle color = lBlue, fill opacity = .9},
-	box/header font color = {headerGrey},
+	left logo = {\includegraphics[height=0.75\headheight]{figures/pumas.pdf}},
+	right logo = {\includegraphics[height=0.5\headheight]{figures/MIT-logo-with-spelling-print-black-red-design1}},
+	box/border style= {draw = black, line width = 1pt},
+	box/header style = {top color = mitred, bottom color = mitred, middle color = mitred, fill opacity = .9},
+	box/header font color = {white},
 	box/header font = {\large\rm},
 	box/body style = {fill = white, fill opacity=.85},
 	head height = {0.15\textheight},
 	box/all rounded
 }
 
-\boxit{col = 0, at top, name=problem}{The Zebrafish Hindbrain}{
-	\input{hindbrain.tex}
-	\vspace{10pt}
+\boxit{col = 0, at top, name=problem}{Introduction to Stiff ODE}{
+  In general, an ordinary differential equation (ODE) can be written in the form
+  of
+  \[
+    u' = f(u, t).
+  \]
+  In practice, stiff ODEs can be thought as a type of ODEs which explicit
+  solvers do not work. Here is an example: the solutions of the equation
+  \[
+    u' = -50(u - \cos t), \quad u(0) = 0
+  \]
+  has a rapid transient phase at the beginning.
+
+  \vspace{5pt}
+  \begin{center}
+    \input{stiffness_euler.tex}
+  \end{center}
+  However, most stiff solvers need to use Newton iterations to solve a system of
+  algebraic equations at every time step. Hence, factorizing a matrix in the
+  form of
+  \[
+    W = -I + h \gamma J
+  \]
+  is necessary, and it takes the majority of the runtime.
+  \vspace{6.5pt}
 }
 
-\boxit{col = 0, below of = problem, name=box2}{The Interaction Network}{
-	\input{network.tex}
-	\vspace{5.3pt}
+\boxit{col = 0, below of = problem, name=box2}{Towards Efficiency of Solving QsP
+  Models}{
+  The stiff ODEs arise from QsP models tend to have small sizes ($<500$ ODEs),
+  frequent dosing events, multirate behaviors, and each equation is in
+  a relative simple form. Thus, we can utilize
+
+  \vspace{5pt}
+  \begin{multicols}{2}
+    \begin{itemize}
+      \item Sparse Jacobian
+      \item Jacobian reuse
+      \item Relaxed Newton iteration
+      \item Rosenbrock(-W) methods
+      \item Multirate methods
+      \item Exponential Runge-Kutta methods
+    \end{itemize}
+  \end{multicols}
+  to improve runtime.
+  \vspace{15pt}
 }
 
-\boxit{at top, col = 1, name=box3}{Phenomenological Model}{
-	\input{model.tex}
+\boxit{at top, col = 1, name=box3}{Rosenbrock(-W) Methods}{
+  A well-known Rosenbrock-W method is the Rosenbrock23 method, which takes the
+  form:
+  \begin{align}
+    f_0 &= f(u_n, t_n) \\
+    k_1 &= W^{-1}(f_0 + hdT) \\
+    f_1 &= f(u_n + \frac{h}{2}k_1, t_n+\frac{h}{2}) \\
+    k_2 &= W^{-1}(f_1 - k_1) + k_1 \\
+    u_{n+1} &= u_n + hk_2 \\
+    f_2 &= f(u_{n+1}, t_{n+1}) \\
+    k_3 &= W^{-1}(f_2 - (6+\sqrt{2})(k_2-f_1) - 2(k_1 - f_0) + hdT),
+  \end{align}
+  where $W=I-hdJ$ with $d=\frac{1}{2+\sqrt{2}}$.
+  It is a W-method which means that one can reuse Jacobian while maintaining the
+  order of accuracy.
+  \begin{center}
+    \input{hires_bench.tex}
+  \end{center}
 }
 
-\boxit{below of = box3, col=1, name=box4}{The Fluctuation-Dissipation Theorem}{
-	\input{fluc.tex}
+\boxit{below of = box3, col=1, name=box4}{Implicit-Explicit (Multirate) and
+  Exponential Methods}{
+  Implicit-explicit methods solve the equations in the form of
+  \[
+    u' = f_1(u,t) + f_2(u, t),
+  \]
+  where $f_1$ is stiff, and $f_2$ is non-stiff.
+  If the $f_1$ function is
+  non-linear, one can use an additive Runge-Kutta method. If the $f_1$ function
+  is linear, then one solve the linear part exactly by using an exponential
+  Runge-Kutta method.
+  %Exponential Runge-Kutta integrators use linear
+  %combinations of matrix $\phi$ function, where $\phi$ functions are defined by
+  %\[
+  %  \phi_0(A) = e^A, \quad \phi_l(A) = \frac{1}{(l-1)!}\int_0^1
+  %  e^{(1-\theta)A}\theta^{l-1}\; d\theta, \quad l = 1,2,\cdots.
+  %\]
+  %One popular method of computing the matrix $\phi$ function is to use adaptive
+  %Krylov subspace methods, which is to find $\phi(z)v$ in the space
+  %\[
+  %  \text{span}\{z, Az, A^2z, \cdots, A^{m-1}z\},
+  %\]
+  %where $m$ adapts to balance the computational effort and accuracy.
+  \begin{center}
+    \input{burgers_bench.tex}
+  \end{center}
 }
 
+%\boxit{below of = box4, col = 1, name=solution}{Exponential Propagation Iterative
+%  Runge-Kutta (EPIRK) Methods}{
+%}
 
-\boxit{below of = box4, col = 1, name=solution}{Solution}{
-	\input{solution.tex}
+\boxit{at top,col = 2, name=events}{Disadvantages of BDF Method}{
+  BDF method has a very high starting cost, which makes it not suitable for QsP
+  modeling. Here is a plot to show that BDF method is inefficient with the
+  presence of events.
+  \begin{center}
+    \includegraphics[width=200px,height=150px]{2019-04-22-164648_1597x1096_escrotum.png}
+  \end{center}
+  \vspace{3pt}
+
+  We can see that because BDF method needs history states, it has to restart
+  from the first order every time when there is an event. Therefore, it has to
+  take every small time steps to avoid step rejections.
+
+  \vspace{5pt}
+  High order BDF method is not A-stable, thus using high order BDFs could lead
+  to oscillatory solution because of the lack of A-stability.
+  \includegraphics[width=50px,height=50px]{Stability_region_for_BDF4.png}
 }
 
-\boxit{at top,col = 2, name=conclusions}{Conclusions}{
-	\input{conclusions.tex}
-	\vspace{4pt}
+\boxit{below of = events,col = 2, name=conc}{Conclusion}{
+  \begin{itemize}
+    \item We have sped up one of Pfizer's cardiac QsP models by 26 times by
+      translating Matlab to Julia and use a fifth order Rosenbrock method.
+    \item Rosenbrock methods tend to perform better than BDF for small models.
+    \item With the presence of frequent events, one should consider implicit RK
+      or Rosenbrock to avoid inefficiency.
+    \item Exponential integrators are very worth looking into.
+    \item Jacobian reuse is crucial for performance.
+  \end{itemize}
+  \vspace{10pt}
 }
 
-\boxit{below of = conclusions,col = 2, name=future}{Future Directions}{
-	\input{future.tex}
-	\vspace{4pt}
+\boxit{below of = conc,col = 2, name=ack}{Acknowledgments}{
+  We would like to acknowledge Julia Computing and the University of Maryland
+  Baltimore's Center for Translational Medicine for sponsoring the development
+  of OrdinaryDiffEq and PuMaS.
+  \vspace{9.5pt}
 }
-
-\boxit{col=2, below of= future, name = refs}{Acknowledgments}{
-	\vspace{3pt}
-	\input{ack.tex}
-	\vspace{6.3pt}
-}
-
 
 \end{document}
