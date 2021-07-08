@@ -7,6 +7,8 @@
 \documentclass[papersize={48in,36in},dvipsnames,fontmag=.60]{umbcposter}
 
 \usepackage{multicol}
+\usepackage{listings}
+
 \usepackage{tikz}
 \usepackage{pgfplots}
 
@@ -33,165 +35,146 @@
             inner sep=0.15\headheight,  % padding around the text
         ] at (0,0) {
             \begin{tabular}{c}
-                \Huge Efficient Stiff Ordinary Differential Equation Solvers for \\
-                \Huge Quantitative Systems Pharmacology (QsP) \\
-                \huge Yingbo Ma, Xingjian Guo, Chris Rackauckas
+                \Huge ModelingToolkit: A Composable Graph Transformation System for \\
+                \Huge Equation-Based Modeling \\
+                \huge{Yingbo Ma,
+                  Shashi Gowda, Ranjan Anantharaman,
+                  Chris Laughman,
+                  Viral Shah,
+                Chris Rackauckas} \\
+                \LARGE{Julia Computing}
             \end{tabular}
     };    % don't forget the semicolon here!
 }
 
 \posterinit{
-	%grid,
-	columns = {3},
-	background style = {fill = mitlgray},
-	title = {\mytitle},
-	left logo = {\includegraphics[height=0.75\headheight]{figures/pumas.pdf}},
-	right logo = {\includegraphics[height=0.5\headheight]{figures/MIT-logo-with-spelling-print-black-red-design1}},
-	box/border style= {draw = black, line width = 1pt},
-	box/header style = {top color = mitred, bottom color = mitred, middle color = mitred, fill opacity = .9},
-	box/header font color = {white},
-	box/header font = {\large\rm},
-	box/body style = {fill = white, fill opacity=.85},
-	head height = {0.15\textheight},
-	box/all rounded
+  %grid,
+  columns = {3},
+  background style = {fill = mitlgray},
+  title = {\mytitle},
+  %left logo = {\includegraphics[height=0.75\headheight]{figures/pumas.pdf}},
+  %right logo = {\includegraphics[height=0.5\headheight]{figures/MIT-logo-with-spelling-print-black-red-design1}},
+  box/border style= {draw = black, line width = 1pt},
+  box/header style = {top color = mitred, bottom color = mitred, middle color = mitred, fill opacity = .9},
+  box/header font color = {white},
+  box/header font = {\large\rm},
+  box/body style = {fill = white, fill opacity=.85},
+  head height = {0.15\textheight},
+  box/all rounded
 }
 
-\boxit{col = 0, at top, name=problem}{Introduction to Stiff ODE}{
-  In general, an ordinary differential equation (ODE) can be written in the form
-  of
-  \[
-    u' = f(u, t).
-  \]
-  In practice, stiff ODEs can be thought as a type of ODEs which explicit
-  solvers do not work. Here is an example: the solutions of the equation
-  \[
-    u' = -50(u - \cos t), \quad u(0) = 0
-  \]
-  has a rapid transient phase at the beginning.
+\boxit{col = 0, at top, name=problem}{ModelingToolkit Overview}{
+  ModelingToolkit is a general-purpose Computer Algebra System (CAS) in the
+  Julia programming language, as the core expression representation for
+  ModelingToolkit, which allows for efficient application of expression
+  rewriting.
+  \vspace{13pt}
 
-  \vspace{5pt}
+  The modeling domain of MTK covers the span of:
+  \begin{itemize}
+    \item Ordinary differential(-algebraic) equations (\texttt{ ODESystem })
+    \item Stochastic differential(-algebraic) equations (\texttt{ SDESystem })
+    \item Partial differential equations (\texttt{ PDESystem })
+    \item Nonlinear solve equations (\texttt{ NonlinearSystem })
+    \item Optimization problems (\texttt{ OptimizationSystem })
+    \item Continuous-Time Markov Chains (\texttt{ JumpSystem })
+    \item Nonlinear Optimal Control (\texttt{ ControlSystem })
+  \end{itemize}
+  \vspace{13pt}
+
+  For example, the following code builds and solves the classic Lorenz '63
+  system:
   \begin{center}
-    \input{stiffness_euler.tex}
+    \includegraphics[width=220px]{figures/lorenz.png}
   \end{center}
-  However, most stiff solvers need to use Newton iterations to solve a system of
-  algebraic equations at every time step. Hence, factorizing a matrix in the
-  form of
-  \[
-    W = -I + h \gamma J
-  \]
-  is necessary, and it takes the majority of the runtime.
-  \vspace{6.5pt}
+  As an acausal modeling system, one can also arbitrarily compose system
+  components and generate differential-algebraic equations by placing algebraic
+  relations between the variables. The following extends the previous example to
+  show how to connect a second instance of the Lorenz \texttt{ODESystem} to the
+  first, with an algebraic variable defined implicitly by their connection:
+  \vspace{9pt}
+  \begin{center}
+    \includegraphics[width=220px]{figures/lorenz2.png}
+  \end{center}
+  \vspace{11pt}
 }
 
-\boxit{col = 0, below of = problem, name=box2}{Towards Efficiency of Solving QsP
-  Models}{
-  The stiff ODEs arise from QsP models tend to have small sizes ($<500$ ODEs),
-  frequent dosing events, multirate behaviors, and each equation is in
-  a relative simple form. Thus, we can utilize
-
-  \vspace{5pt}
-  \begin{multicols}{2}
-    \begin{itemize}
-      \item Sparse Jacobian
-      \item Jacobian reuse
-      \item Relaxed Newton iteration
-      \item Rosenbrock(-W) methods
-      \item Multirate methods
-      \item Exponential Runge-Kutta methods
-    \end{itemize}
-  \end{multicols}
-  to improve runtime.
-  \vspace{15pt}
-}
-
-\boxit{at top, col = 1, name=box3}{Rosenbrock(-W) Methods}{
-  A well-known Rosenbrock-W method is the Rosenbrock23 method, which takes the
-  form:
+\boxit{at top, col = 1, name=box3}{Index Reduction of Numerical Code}{
+  Cartesian pendulum (index 3 system):
+  It has 5 state variables, $x$, $y$, the velocities $v_x$ and $v_y$,
+  and $T$, with parameters $g$ for the acceleration due to gravity and the fixed
+  length of the pendulum $L$.
   \begin{align}
-    f_0 &= f(u_n, t_n) \\
-    k_1 &= W^{-1}(f_0 + hdT) \\
-    f_1 &= f(u_n + \frac{h}{2}k_1, t_n+\frac{h}{2}) \\
-    k_2 &= W^{-1}(f_1 - k_1) + k_1 \\
-    u_{n+1} &= u_n + hk_2 \\
-    f_2 &= f(u_{n+1}, t_{n+1}) \\
-    k_3 &= W^{-1}(f_2 - (6+\sqrt{2})(k_2-f_1) - 2(k_1 - f_0) + hdT),
+    x^\prime &= v_x\\
+    v_x^\prime &= Tx\\
+    y^\prime &= v_y\\
+    v_y^\prime &= Ty - g\\
+    0 &= x^2 + y^2 - L^2
   \end{align}
-  where $W=I-hdJ$ with $d=\frac{1}{2+\sqrt{2}}$.
-  It is a W-method which means that one can reuse Jacobian while maintaining the
-  order of accuracy.
+  Numerical code would be
   \begin{center}
-    \input{hires_bench.tex}
+    \includegraphics[width=220px]{figures/code3.png}
+  \end{center}
+
+  We can reduce the index of numerical code by symbolically tracing into the
+  system.
+  \begin{center}
+    \includegraphics[width=220px]{figures/code4.png}
+  \end{center}
+  From the traced system, ModelingToolkit automatically generates the index 1
+  system
+  \begin{align}
+    x^\prime =& v_x \\
+    v_x^\prime =& x T \\
+    y^\prime =& v_y \\
+    v_y^\prime =& y T - g \\
+    0 =& 2 \left(v_x^{2} + v_y^{2} + y ( y T - g ) + T x^2 \right)
+  \end{align}
+  \begin{center}
+    \includegraphics[width=200px]{figures/pend.pdf}
   \end{center}
 }
 
-\boxit{below of = box3, col=1, name=box4}{Implicit-Explicit (Multirate) and
-  Exponential Methods}{
-  Implicit-explicit methods solve the equations in the form of
-  \[
-    u' = f_1(u,t) + f_2(u, t),
-  \]
-  where $f_1$ is stiff, and $f_2$ is non-stiff.
-  If the $f_1$ function is
-  non-linear, one can use an additive Runge-Kutta method. If the $f_1$ function
-  is linear, then one solve the linear part exactly by using an exponential
-  Runge-Kutta method.
-  %Exponential Runge-Kutta integrators use linear
-  %combinations of matrix $\phi$ function, where $\phi$ functions are defined by
-  %\[
-  %  \phi_0(A) = e^A, \quad \phi_l(A) = \frac{1}{(l-1)!}\int_0^1
-  %  e^{(1-\theta)A}\theta^{l-1}\; d\theta, \quad l = 1,2,\cdots.
-  %\]
-  %One popular method of computing the matrix $\phi$ function is to use adaptive
-  %Krylov subspace methods, which is to find $\phi(z)v$ in the space
-  %\[
-  %  \text{span}\{z, Az, A^2z, \cdots, A^{m-1}z\},
-  %\]
-  %where $m$ adapts to balance the computational effort and accuracy.
+\boxit{at top,col = 2, name=events}{Extracting Parallelism from Structural Simplification}{
+  Using the block lower triangular sorting, ModelingToolkit is able to
+  parallelize nonlinear system solving.
+
+  The incidence matrix of 50 independent RC circuits whose resistance is a
+  non-linear function of the ambient temperature, and that of a model of an HVAC
+  system are shown. A non-zero $(i,j)$-th entry means $j$-th variable appears in
+  $i$-th equation. Each connected component in the subfigures in the second and
+  third column imply a single call to solver to obtain the values of the
+  algebraic variables in that component.  ModelingToolkit is able to detect
+  independence between components and spawn these calls in parallel. Note that
+  we only show algebraic equations and algebraic variables in the Block Lower
+  Triangular (BLT)-sorted spy plots, because only the algebraic part of the
+  system has a non-trivial dependency structure that we need to analyze for
+  parallel executions.
   \begin{center}
-    \input{burgers_bench.tex}
+    \includegraphics[width=200px]{figures/par.png}
   \end{center}
-}
 
-%\boxit{below of = box4, col = 1, name=solution}{Exponential Propagation Iterative
-%  Runge-Kutta (EPIRK) Methods}{
-%}
-
-\boxit{at top,col = 2, name=events}{Disadvantages of BDF Method}{
-  BDF method has a very high starting cost, which makes it not suitable for QsP
-  modeling. Here is a plot to show that BDF method is inefficient with the
-  presence of events.
-  \begin{center}
-    \includegraphics[width=200px,height=150px]{2019-04-22-164648_1597x1096_escrotum.png}
-  \end{center}
-  \vspace{3pt}
-
-  We can see that because BDF method needs history states, it has to restart
-  from the first order every time when there is an event. Therefore, it has to
-  take every small time steps to avoid step rejections.
-
-  \vspace{5pt}
-  High order BDF method is not A-stable, thus using high order BDFs could lead
-  to oscillatory solution because of the lack of A-stability.
-  \includegraphics[width=50px,height=50px]{Stability_region_for_BDF4.png}
 }
 
 \boxit{below of = events,col = 2, name=conc}{Conclusion}{
-  \begin{itemize}
-    \item We have sped up one of Pfizer's cardiac QsP models by 26 times by
-      translating Matlab to Julia and use a fifth order Rosenbrock method.
-    \item Rosenbrock methods tend to perform better than BDF for small models.
-    \item With the presence of frequent events, one should consider implicit RK
-      or Rosenbrock to avoid inefficiency.
-    \item Exponential integrators are very worth looking into.
-    \item Jacobian reuse is crucial for performance.
-  \end{itemize}
+  While discrete graph-based algorithms have been added before to equation-based
+  modeling environments to improve stability and performance, ModelingToolkit is
+  the first to embed such a modeling environment directly into a high
+  performance host language and allow for composable transformations to be
+  constructed using a CAS. In a sense, this extends the abstract interpretation
+  techniques of automatic differentiation to directly perform arbitrary symbolic
+  transformations on a user's code for alternative mathematical purposes.
   \vspace{10pt}
 }
 
 \boxit{below of = conc,col = 2, name=ack}{Acknowledgments}{
-  We would like to acknowledge Julia Computing and the University of Maryland
-  Baltimore's Center for Translational Medicine for sponsoring the development
-  of OrdinaryDiffEq and PuMaS.
+  The information, data, or work presented herein was funded in part by the
+  Advanced Research Projects Agency-Energy (ARPA-E), U.S. Department of Energy,
+  under Award Number DE-AR0001222 and NSF grants OAC-1835443 and IIP-1938400. We
+  additionally thank Simon Frost of Microsoft Research Studies in Pandemic
+  Preparedness for helping fund this work. The views and opinions of authors
+  expressed herein do not necessarily state or reflect those of the United States
+  Government or any agency thereof.
   \vspace{9.5pt}
 }
 
